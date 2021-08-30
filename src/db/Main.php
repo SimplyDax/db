@@ -17,6 +17,8 @@ use function mysqli_fetch_array;
 class Main extends PluginBase {
     public mysqli $db;
 
+    private array $cache;
+
     public function onEnable() {
         $this->getLogger()->info("База данных запущена...");
         $this->connectdb();
@@ -69,18 +71,22 @@ class Main extends PluginBase {
 
     /**
      * @param $name
+     * @return bool
      */
-  public function createPlayer($name){
+  public function createPlayer($name) :bool {
   	$names = strtolower($name);
   	if(!$this->getPlayer($name)){
         $sql = "INSERT INTO `users` (`name`, `joins`) VALUES ('" . $names . "', '1')";
         $res = mysqli_query($this->db, $sql);
         if($res){
             $this->getLogger()->alert("Новый игрок зарегистрирован на сервере");
+            return true;
         }else{
             $this->getLogger()->error("Произошла ошибка при выполнении запроса" . $sql . "Код:" . mysqli_error($this->db));
+            return false;
         }
     }
+  	return false;
   } // achievements
 
     /**
@@ -210,9 +216,12 @@ class Main extends PluginBase {
      *
      * @param $name
      * @param $column
-     * @return int|mixed
+     * @return int|string|mixed
      */
-  public function getColumn($name, $column){  	
+  public function getColumn($name, $column) :?string{
+      if($this->isCache($name)){
+          return $this->getCache($name)[$column];
+      }
   	$sql = "SELECT ". $column ." FROM users where name = '". $name ."' LIMIT 1";
   	$result = mysqli_query($this->db, $sql);
   	$row = mysqli_fetch_array($result); 	
@@ -220,6 +229,7 @@ class Main extends PluginBase {
      	$this->getLogger()->error("Произошла ошибка при выполнении запроса"); 
      	return 0;		
   	}else{
+  	    $this->addCache($name, $row);
   		return $row[$column];
   	}
   }
@@ -229,15 +239,19 @@ class Main extends PluginBase {
      * @param $name
      * @return array|false
      */
-  public function getAll($name){
-  	$sql = "SELECT * FROM users where name = '". $name ."' LIMIT 1";
-  	$result = mysqli_query($this->db, $sql);
-  	$row = mysqli_fetch_array($result); 	
-  	if($row == false){
-     	$this->getLogger()->error("Произошла ошибка при выполнении запроса"); 
-     	return false;		
-  	}else{
-  		return $row;
+  public function getAll($name) :?array {
+      if($this->isCache($name)){
+          return $this->getCache($name);
+      }
+  	  $sql = "SELECT * FROM users where name = '". $name ."' LIMIT 1";
+  	  $result = mysqli_query($this->db, $sql);
+  	  $row = mysqli_fetch_array($result);
+  	  if($row == false){
+  	      $this->getLogger()->error("Произошла ошибка при выполнении запроса");
+  	      return false;
+  	  }else{
+  	      $this->addCache($name, $row);
+  	      return $row;
   	}
   }
     /**
@@ -249,6 +263,7 @@ class Main extends PluginBase {
   public function add($name, $column, $num) :bool{
   	$sql = "UPDATE users SET ". $column ." = $column + $num WHERE name = '". $name ."'";
   	$result = mysqli_query($this->db, $sql);
+  	$this->cacheClean($name);
   	if($result == false){
      	$this->getLogger()->error("Произошла ошибка при выполнении запроса"); 
      	return false;		
@@ -264,15 +279,16 @@ class Main extends PluginBase {
      * @return bool
      */
   public function reduce($name, $column, $num) :bool{
-  	$sql = "UPDATE users SET ". $column ." = $column - $num WHERE name = '". $name ."'";
-  	$result = mysqli_query($this->db, $sql);
-  	if($result == false){
-     	$this->getLogger()->error("Произошла ошибка при выполнении запроса"); 
-     	return false;		
-  	}else{
-  		return true;
-  	}
-  } 
+      $sql = "UPDATE users SET ". $column ." = $column - $num WHERE name = '". $name ."'";
+      $result = mysqli_query($this->db, $sql);
+      $this->cacheClean($name);
+      if($result == false){
+          $this->getLogger()->error("Произошла ошибка при выполнении запроса");
+          return false;
+      }else{
+          return true;
+      }
+  }
   // Установить значение полю(одному)
 
     /**
@@ -282,15 +298,16 @@ class Main extends PluginBase {
      * @return bool
      */
   public function set($name, $column, $num) :bool{
-  	$sql = "UPDATE users SET ". $column ." = '". $num . "' WHERE name = '". $name ."'";
-  	$result = mysqli_query($this->db, $sql);
-  	if($result == false){
-     	$this->getLogger()->error("Произошла ошибка при выполнении запроса"); 
-     	return false;		
-  	}else{
-  		return true;
-  	}
-  }  
+      $sql = "UPDATE users SET ". $column ." = '". $num . "' WHERE name = '". $name ."'";
+      $result = mysqli_query($this->db, $sql);
+      $this->cacheClean($name);
+      if($result == false){
+          $this->getLogger()->error("Произошла ошибка при выполнении запроса");
+          return false;
+      }else{
+          return true;
+      }
+  }
   // Прибавление значения поля у всех
 
     /**
@@ -340,5 +357,26 @@ class Main extends PluginBase {
   	}else{
   		return true;
   	}
-  }    
+  }
+
+  private function getCache(string $name){
+      if($this->isCache($name)){
+          return $this->cache[strtolower($name)];
+      }
+      return null;
+  }
+
+  private function isCache(string $name){
+      return isset($this->cache[strtolower($name)]);
+  }
+
+  private function addCache(string $name, array $array){
+      if(!$this->isCache($name)){
+          $this->cache[strtolower($name)] = $array;
+      }
+  }
+
+  private function cacheClean(string $name){
+      unset($this->cache[strtolower($name)]);
+  }
 }
