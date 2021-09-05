@@ -30,7 +30,7 @@ class Main extends PluginBase {
 
 	// подключение к бд
 	public function connectdb(){
-        $this->db = mysqli_connect("127.0.0.1", "dax", "456411", "serv", 3306);
+        $this->db = mysqli_connect("127.0.0.1", "пользователь", "пароль", "база-данных", 3306);
         if (mysqli_connect_errno()) {
             $this->getLogger()->error("Соединение с базой не удалось: " . mysqli_connect_error());
             $this->getLogger()->alert("Выполняется переподключение...");
